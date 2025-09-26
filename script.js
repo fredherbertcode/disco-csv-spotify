@@ -352,6 +352,13 @@ class DiscogsToSpotifyConverter {
                 let found = false;
                 let album = null;
 
+                // Debug logging for specific problematic searches
+                const isDebugSearch = artist.toLowerCase().includes('project pablo') ||
+                                    albumTitle.toLowerCase().includes('hope you\'re well');
+                if (isDebugSearch) {
+                    console.log(`🔍 DEBUG: Searching for "${artist} - ${albumTitle}"`);
+                }
+
                 // Strategy 1a: Search for albums with exact quotes
                 const exactSearchQuery = `album:"${albumTitle}" artist:"${artist}"`;
                 const albumResponse = await fetch(
@@ -369,19 +376,29 @@ class DiscogsToSpotifyConverter {
 
                 if (albumResponse.ok) {
                     const albumData = await albumResponse.json();
+                    if (isDebugSearch) {
+                        console.log(`🔍 Strategy 1a results:`, albumData.albums.items.length, 'albums found');
+                        albumData.albums.items.forEach((item, idx) => {
+                            console.log(`  ${idx + 1}. "${item.name}" by ${item.artists[0].name} (${item.album_type})`);
+                        });
+                    }
                     if (albumData.albums.items.length > 0) {
                         album = albumData.albums.items[0];
                         found = true;
+                        if (isDebugSearch) console.log(`✅ Found with Strategy 1a: ${album.name}`);
                     }
                 }
 
-                // Strategy 1b: Search for singles/EPs with exact quotes (if album search failed)
+                // Strategy 1b: Search without quotes for broader EP/Single matching
                 if (!found) {
+                    if (isDebugSearch) console.log(`🔍 Strategy 1b: Broader search without quotes`);
+
+                    const broadSearchQuery = `${albumTitle} ${artist}`;
                     const singleResponse = await fetch(
                         `https://api.spotify.com/v1/search?${new URLSearchParams({
-                            q: exactSearchQuery,
+                            q: broadSearchQuery,
                             type: 'album',
-                            limit: 10
+                            limit: 20
                         })}`,
                         {
                             headers: {
@@ -392,16 +409,44 @@ class DiscogsToSpotifyConverter {
 
                     if (singleResponse.ok) {
                         const singleData = await singleResponse.json();
-                        // Look for singles or EPs specifically
-                        const singleOrEP = singleData.albums.items.find(item =>
-                            item.album_type === 'single' ||
-                            item.name.toLowerCase().includes('ep') ||
-                            item.name.toLowerCase().includes('single')
-                        );
+                        if (isDebugSearch) {
+                            console.log(`🔍 Strategy 1b results:`, singleData.albums.items.length, 'items found');
+                            singleData.albums.items.forEach((item, idx) => {
+                                console.log(`  ${idx + 1}. "${item.name}" by ${item.artists[0].name} (${item.album_type})`);
+                            });
+                        }
 
-                        if (singleOrEP) {
-                            album = singleOrEP;
+                        // Look for exact title match first, then partial matches
+                        let bestMatch = singleData.albums.items.find(item => {
+                            const titleMatch = item.name.toLowerCase() === albumTitle.toLowerCase();
+                            const artistMatch = item.artists.some(a =>
+                                a.name.toLowerCase() === artist.toLowerCase() ||
+                                a.name.toLowerCase().includes(artist.toLowerCase()) ||
+                                artist.toLowerCase().includes(a.name.toLowerCase())
+                            );
+                            return titleMatch && artistMatch;
+                        });
+
+                        // If no exact match, look for partial title match with artist match
+                        if (!bestMatch) {
+                            bestMatch = singleData.albums.items.find(item => {
+                                const titleWords = albumTitle.toLowerCase().split(' ');
+                                const itemTitleLower = item.name.toLowerCase();
+                                const titleMatch = titleWords.some(word =>
+                                    word.length > 2 && itemTitleLower.includes(word)
+                                );
+                                const artistMatch = item.artists.some(a =>
+                                    a.name.toLowerCase().includes(artist.toLowerCase()) ||
+                                    artist.toLowerCase().includes(a.name.toLowerCase())
+                                );
+                                return titleMatch && artistMatch;
+                            });
+                        }
+
+                        if (bestMatch) {
+                            album = bestMatch;
                             found = true;
+                            if (isDebugSearch) console.log(`✅ Found with Strategy 1b: "${bestMatch.name}" (${bestMatch.album_type})`);
                         }
                     }
                 }

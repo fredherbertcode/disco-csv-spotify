@@ -268,6 +268,7 @@ class DiscogsToSpotifyConverter {
                 status.innerHTML = `<div class="status-success">✅ Connected as ${user.display_name}</div>`;
 
                 document.getElementById('playlistName').value = `My Discogs Collection (${new Date().toLocaleDateString()})`;
+                console.log('Authentication successful, showing step 4');
                 this.showStep(4);
             } else {
                 throw new Error('Failed to get user info');
@@ -446,10 +447,18 @@ class DiscogsToSpotifyConverter {
     }
 
     showStep(stepNumber) {
+        console.log(`Showing steps up to: ${stepNumber}`);
         for (let i = 1; i <= 4; i++) {
             const step = document.getElementById(`step${i}`);
-            if (i <= stepNumber) {
-                step.style.display = 'block';
+            if (step) {
+                if (i <= stepNumber) {
+                    step.style.display = 'block';
+                    console.log(`Step ${i}: shown`);
+                } else {
+                    console.log(`Step ${i}: hidden`);
+                }
+            } else {
+                console.log(`Step ${i}: element not found`);
             }
         }
     }
@@ -468,10 +477,17 @@ class DiscogsToSpotifyConverter {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const converter = new DiscogsToSpotifyConverter();
 
-    if (converter.checkSpotifyAuth()) {
-        converter.showStep(3);
+    const authenticated = await converter.checkSpotifyAuth();
+    if (authenticated) {
+        // If we're authenticated and have CSV data, show all steps
+        if (converter.csvData && converter.csvData.length > 0) {
+            converter.showStep(4);
+        } else {
+            // If authenticated but no CSV, show steps 2-4 so user can upload CSV
+            converter.showStep(4);
+        }
     }
 });

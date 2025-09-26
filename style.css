@@ -47,13 +47,19 @@ header p {
     margin: 0 auto 16px;
 }
 
-.linkedin-link {
+.social-links {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+}
+
+.social-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 40px;
     height: 40px;
-    background: #0077b5;
     color: white;
     border-radius: 8px;
     text-decoration: none;
@@ -61,15 +67,30 @@ header p {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.linkedin-link:hover {
-    background: #005885;
+.social-link:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
-.linkedin-link svg {
+.social-link svg {
     width: 20px;
     height: 20px;
+}
+
+.linkedin-link {
+    background: #0077b5;
+}
+
+.linkedin-link:hover {
+    background: #005885;
+}
+
+.instagram-link {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+.instagram-link:hover {
+    background: linear-gradient(45deg, #e6683c 0%, #dc2743 25%, #cc2366 50%, #bc1888 75%, #8b0e6b 100%);
 }
 
 .step-container {

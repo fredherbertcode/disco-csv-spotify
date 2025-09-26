@@ -54,6 +54,11 @@ class DiscogsToSpotifyConverter {
         try {
             const text = await this.readFileAsText(file);
             this.csvData = this.parseCSV(text);
+
+            // Store CSV data in localStorage to persist through auth redirect
+            localStorage.setItem('csvData', JSON.stringify(this.csvData));
+            localStorage.setItem('csvFileName', file.name);
+
             this.displayCSVPreview();
             this.showStep(2);
         } catch (error) {
@@ -111,7 +116,7 @@ class DiscogsToSpotifyConverter {
         return values;
     }
 
-    displayCSVPreview() {
+    displayCSVPreview(fileName = null) {
         const preview = document.getElementById('csvPreview');
         preview.classList.remove('hidden');
 
@@ -127,7 +132,12 @@ class DiscogsToSpotifyConverter {
             )
         );
 
-        let html = '<div class="csv-preview"><h3>CSV Preview (showing first 5 records)</h3>';
+        let html = '<div class="csv-preview">';
+        if (fileName) {
+            html += `<h3>📁 ${fileName} - Preview (showing first 5 records)</h3>`;
+        } else {
+            html += '<h3>📁 CSV Preview (showing first 5 records)</h3>';
+        }
         html += '<table><thead><tr>';
 
         relevantHeaders.forEach(header => {
@@ -604,6 +614,26 @@ class DiscogsToSpotifyConverter {
         }
     }
 
+    restoreCSVData() {
+        const storedData = localStorage.getItem('csvData');
+        const storedFileName = localStorage.getItem('csvFileName');
+
+        if (storedData) {
+            try {
+                this.csvData = JSON.parse(storedData);
+                if (this.csvData && this.csvData.length > 0) {
+                    this.displayCSVPreview(storedFileName);
+                    console.log(`Restored CSV data: ${this.csvData.length} records from ${storedFileName}`);
+                }
+            } catch (error) {
+                console.error('Error restoring CSV data:', error);
+                // Clear corrupted data
+                localStorage.removeItem('csvData');
+                localStorage.removeItem('csvFileName');
+            }
+        }
+    }
+
     showStatus(message, type) {
         const statusDiv = document.createElement('div');
         statusDiv.className = `status-message status-${type}`;
@@ -621,6 +651,9 @@ class DiscogsToSpotifyConverter {
 document.addEventListener('DOMContentLoaded', async () => {
     const converter = new DiscogsToSpotifyConverter();
 
+    // Restore CSV data if it exists in localStorage
+    converter.restoreCSVData();
+
     const authenticated = await converter.checkSpotifyAuth();
     if (authenticated) {
         // If we're authenticated and have CSV data, show all steps
@@ -630,5 +663,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // If authenticated but no CSV, show steps 2-4 so user can upload CSV
             converter.showStep(4);
         }
+    } else if (converter.csvData && converter.csvData.length > 0) {
+        // If we have CSV data but not authenticated, show step 2
+        converter.showStep(2);
     }
 });

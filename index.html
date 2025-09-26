@@ -10,12 +10,12 @@
     <div class="container">
         <header>
             <h1>🎵 Discogs → Spotify</h1>
-            <p>Convert your Discogs collection to a Spotify playlist</p>
+            <p>Convert your Discogs collection into a Spotify playlist with all album tracks</p>
         </header>
 
         <div class="step-container">
             <div class="step" id="step1">
-                <h2>Step 1: Upload Discogs CSV</h2>
+                <h2>📁 Step 1: Upload Discogs CSV</h2>
                 <div class="upload-area" id="uploadArea">
                     <input type="file" id="csvFile" accept=".csv" />
                     <p>Drop your Discogs collection CSV here or click to browse</p>
@@ -24,38 +24,38 @@
             </div>
 
             <div class="step" id="step2" style="display: none;">
-                <h2>Step 2: Connect to Spotify</h2>
+                <h2>🔗 Step 2: Connect to Spotify</h2>
                 <p>Connect your personal Spotify account to create playlists. Each album in your Discogs collection will add all its tracks to the playlist.</p>
                 <button id="spotifyLogin" class="spotify-btn">🎵 Login with Spotify</button>
                 <div id="spotifyStatus" class="hidden"></div>
             </div>
 
             <div class="step" id="step3" style="display: none;">
-                <h2>Step 3: Configure Playlist</h2>
+                <h2>⚙️ Step 3: Configure Playlist</h2>
                 <div class="form-group">
-                    <label for="playlistName">Playlist Name:</label>
-                    <input type="text" id="playlistName" placeholder="My Discogs Collection" />
+                    <label for="playlistName">📝 Playlist Name:</label>
+                    <input type="text" id="playlistName" placeholder="My Discogs Collection Albums" />
                 </div>
                 <div class="form-group">
-                    <label for="playlistDescription">Description:</label>
-                    <input type="text" id="playlistDescription" placeholder="Converted from Discogs collection" />
+                    <label for="playlistDescription">📖 Description:</label>
+                    <input type="text" id="playlistDescription" placeholder="Albums from my Discogs collection" />
                 </div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="publicPlaylist" />
-                        Make playlist public
+                        🌍 Make playlist public
                     </label>
                 </div>
             </div>
 
             <div class="step" id="step4" style="display: none;">
-                <h2>Step 4: Convert Collection</h2>
-                <button id="startConversion" class="convert-btn">Start Conversion</button>
+                <h2>🚀 Step 4: Convert Collection</h2>
+                <button id="startConversion" class="convert-btn">✨ Start Conversion</button>
                 <div id="progress" class="hidden">
                     <div class="progress-bar">
                         <div id="progressFill" class="progress-fill"></div>
                     </div>
-                    <p id="progressText">Converting tracks...</p>
+                    <p id="progressText">🔍 Converting albums...</p>
                 </div>
                 <div id="results" class="hidden"></div>
             </div>

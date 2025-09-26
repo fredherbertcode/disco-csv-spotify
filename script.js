@@ -34,7 +34,7 @@ class DiscogsToSpotifyConverter {
             }
         });
 
-        spotifyLogin.addEventListener('click', () => this.authenticateSpotify());
+        spotifyLogin.addEventListener('click', async () => await this.authenticateSpotify());
         startConversion.addEventListener('click', () => this.startConversion());
     }
 
@@ -150,32 +150,105 @@ class DiscogsToSpotifyConverter {
         preview.innerHTML = html;
     }
 
-    authenticateSpotify() {
+    async authenticateSpotify() {
+        // Generate PKCE code verifier and challenge
+        const codeVerifier = this.generateCodeVerifier();
+        const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+
+        // Store code verifier for later use
+        localStorage.setItem('code_verifier', codeVerifier);
+
         const authUrl = 'https://accounts.spotify.com/authorize?' +
             new URLSearchParams({
-                response_type: 'token',
+                response_type: 'code',
                 client_id: SPOTIFY_CONFIG.CLIENT_ID,
                 scope: SPOTIFY_CONFIG.SCOPES,
                 redirect_uri: SPOTIFY_CONFIG.REDIRECT_URI,
+                code_challenge_method: 'S256',
+                code_challenge: codeChallenge,
                 show_dialog: 'true'
             });
 
         window.location.href = authUrl;
     }
 
-    checkSpotifyAuth() {
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-        const token = params.get('access_token');
+    generateCodeVerifier() {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return btoa(String.fromCharCode.apply(null, array))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    }
 
-        if (token) {
-            this.spotifyToken = token;
-            window.history.replaceState({}, document.title, window.location.pathname);
-            this.initializeSpotifyApi();
-            return true;
+    generateCodeChallenge(codeVerifier) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(codeVerifier);
+        return crypto.subtle.digest('SHA-256', data).then(digest => {
+            return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        });
+    }
+
+    async checkSpotifyAuth() {
+        // Check for authorization code in URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const error = urlParams.get('error');
+
+        if (error) {
+            this.showStatus('Authentication failed: ' + error, 'error');
+            return false;
+        }
+
+        if (code) {
+            try {
+                await this.exchangeCodeForToken(code);
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return true;
+            } catch (error) {
+                this.showStatus('Failed to get access token: ' + error.message, 'error');
+                return false;
+            }
         }
 
         return false;
+    }
+
+    async exchangeCodeForToken(code) {
+        const codeVerifier = localStorage.getItem('code_verifier');
+        if (!codeVerifier) {
+            throw new Error('Code verifier not found');
+        }
+
+        const response = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: SPOTIFY_CONFIG.REDIRECT_URI,
+                client_id: SPOTIFY_CONFIG.CLIENT_ID,
+                code_verifier: codeVerifier,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error_description || 'Token exchange failed');
+        }
+
+        const tokenData = await response.json();
+        this.spotifyToken = tokenData.access_token;
+
+        // Clean up
+        localStorage.removeItem('code_verifier');
+
+        await this.initializeSpotifyApi();
     }
 
     async initializeSpotifyApi() {

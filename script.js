@@ -342,7 +342,7 @@ class DiscogsToSpotifyConverter {
                 let found = false;
                 let album = null;
 
-                // Strategy 1: Search for albums with exact quotes
+                // Strategy 1a: Search for albums with exact quotes
                 const exactSearchQuery = `album:"${albumTitle}" artist:"${artist}"`;
                 const albumResponse = await fetch(
                     `https://api.spotify.com/v1/search?${new URLSearchParams({
@@ -365,6 +365,37 @@ class DiscogsToSpotifyConverter {
                     }
                 }
 
+                // Strategy 1b: Search for singles/EPs with exact quotes (if album search failed)
+                if (!found) {
+                    const singleResponse = await fetch(
+                        `https://api.spotify.com/v1/search?${new URLSearchParams({
+                            q: exactSearchQuery,
+                            type: 'album',
+                            limit: 10
+                        })}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.spotifyToken}`
+                            }
+                        }
+                    );
+
+                    if (singleResponse.ok) {
+                        const singleData = await singleResponse.json();
+                        // Look for singles or EPs specifically
+                        const singleOrEP = singleData.albums.items.find(item =>
+                            item.album_type === 'single' ||
+                            item.name.toLowerCase().includes('ep') ||
+                            item.name.toLowerCase().includes('single')
+                        );
+
+                        if (singleOrEP) {
+                            album = singleOrEP;
+                            found = true;
+                        }
+                    }
+                }
+
                 // Strategy 2: Fallback search without quotes (broader matching)
                 if (!found) {
                     const cleanTitle = albumTitle.replace(/[^\w\s]/g, '').trim();
@@ -374,7 +405,7 @@ class DiscogsToSpotifyConverter {
                         `https://api.spotify.com/v1/search?${new URLSearchParams({
                             q: broadSearchQuery,
                             type: 'album',
-                            limit: 10
+                            limit: 15
                         })}`,
                         {
                             headers: {
@@ -396,6 +427,43 @@ class DiscogsToSpotifyConverter {
 
                             if (bestMatch) {
                                 album = bestMatch;
+                                found = true;
+                            }
+                        }
+                    }
+                }
+
+                // Strategy 3: Search by artist name and partial title match
+                if (!found) {
+                    const artistOnlyQuery = `artist:"${artist}"`;
+
+                    const response = await fetch(
+                        `https://api.spotify.com/v1/search?${new URLSearchParams({
+                            q: artistOnlyQuery,
+                            type: 'album',
+                            limit: 20
+                        })}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.spotifyToken}`
+                            }
+                        }
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.albums.items.length > 0) {
+                            // Look for partial title matches
+                            const cleanSearchTitle = albumTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
+                            const titleWords = cleanSearchTitle.split(' ').filter(word => word.length > 2);
+
+                            const partialMatch = data.albums.items.find(item => {
+                                const cleanItemTitle = item.name.toLowerCase().replace(/[^\w\s]/g, '').trim();
+                                return titleWords.some(word => cleanItemTitle.includes(word));
+                            });
+
+                            if (partialMatch) {
+                                album = partialMatch;
                                 found = true;
                             }
                         }

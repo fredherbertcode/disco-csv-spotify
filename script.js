@@ -268,7 +268,7 @@ class DiscogsToSpotifyConverter {
                 status.innerHTML = `<div class="status-success">✅ Connected as ${user.display_name}</div>`;
 
                 document.getElementById('playlistName').value = `My Discogs Collection (${new Date().toLocaleDateString()})`;
-                this.showStep(3);
+                this.showStep(4);
             } else {
                 throw new Error('Failed to get user info');
             }

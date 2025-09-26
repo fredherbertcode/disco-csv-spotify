@@ -337,15 +337,18 @@ class DiscogsToSpotifyConverter {
             }
 
             try {
-                this.updateProgress((i + 1) / total * 80, `Searching album: ${artist} - ${albumTitle}`);
+                this.updateProgress((i + 1) / total * 80, `Searching: ${artist} - ${albumTitle}`);
 
-                // Search for the album first
-                const albumSearchQuery = `album:"${albumTitle}" artist:"${artist}"`;
+                let found = false;
+                let album = null;
+
+                // Strategy 1: Search for albums with exact quotes
+                const exactSearchQuery = `album:"${albumTitle}" artist:"${artist}"`;
                 const albumResponse = await fetch(
                     `https://api.spotify.com/v1/search?${new URLSearchParams({
-                        q: albumSearchQuery,
+                        q: exactSearchQuery,
                         type: 'album',
-                        limit: 1
+                        limit: 5
                     })}`,
                     {
                         headers: {
@@ -357,28 +360,67 @@ class DiscogsToSpotifyConverter {
                 if (albumResponse.ok) {
                     const albumData = await albumResponse.json();
                     if (albumData.albums.items.length > 0) {
-                        const album = albumData.albums.items[0];
-                        foundAlbums.push(`${artist} - ${albumTitle}`);
+                        album = albumData.albums.items[0];
+                        found = true;
+                    }
+                }
 
-                        // Get all tracks from the album
-                        const tracksResponse = await fetch(
-                            `https://api.spotify.com/v1/albums/${album.id}/tracks?limit=50`,
-                            {
-                                headers: {
-                                    'Authorization': `Bearer ${this.spotifyToken}`
-                                }
+                // Strategy 2: Fallback search without quotes (broader matching)
+                if (!found) {
+                    const cleanTitle = albumTitle.replace(/[^\w\s]/g, '').trim();
+                    const broadSearchQuery = `${cleanTitle} ${artist}`;
+
+                    const response = await fetch(
+                        `https://api.spotify.com/v1/search?${new URLSearchParams({
+                            q: broadSearchQuery,
+                            type: 'album',
+                            limit: 10
+                        })}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.spotifyToken}`
                             }
-                        );
-
-                        if (tracksResponse.ok) {
-                            const tracksData = await tracksResponse.json();
-                            const albumTrackUris = tracksData.items.map(track => track.uri);
-                            trackUris.push(...albumTrackUris);
-
-                            this.updateProgress((i + 1) / total * 80, `Found ${tracksData.items.length} tracks from: ${artist} - ${albumTitle}`);
                         }
-                    } else {
-                        notFound.push(`${artist} - ${albumTitle}`);
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.albums.items.length > 0) {
+                            // Try to find best match by artist name similarity
+                            const bestMatch = data.albums.items.find(item =>
+                                item.artists.some(a =>
+                                    a.name.toLowerCase().includes(artist.toLowerCase()) ||
+                                    artist.toLowerCase().includes(a.name.toLowerCase())
+                                )
+                            );
+
+                            if (bestMatch) {
+                                album = bestMatch;
+                                found = true;
+                            }
+                        }
+                    }
+                }
+
+                if (found && album) {
+                    foundAlbums.push(`${artist} - ${albumTitle}`);
+
+                    // Get all tracks from the album/single
+                    const tracksResponse = await fetch(
+                        `https://api.spotify.com/v1/albums/${album.id}/tracks?limit=50`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.spotifyToken}`
+                            }
+                        }
+                    );
+
+                    if (tracksResponse.ok) {
+                        const tracksData = await tracksResponse.json();
+                        const albumTrackUris = tracksData.items.map(track => track.uri);
+                        trackUris.push(...albumTrackUris);
+
+                        this.updateProgress((i + 1) / total * 80, `Found ${tracksData.items.length} tracks from: ${artist} - ${albumTitle}`);
                     }
                 } else {
                     notFound.push(`${artist} - ${albumTitle}`);

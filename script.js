@@ -490,13 +490,15 @@ class DiscogsToSpotifyConverter {
 
                 // Strategy 3: Search by artist name and partial title match
                 if (!found) {
+                    if (isDebugSearch) console.log(`🔍 Strategy 3: Artist-only search for "${artist}"`);
+
                     const artistOnlyQuery = `artist:"${artist}"`;
 
                     const response = await fetch(
                         `https://api.spotify.com/v1/search?${new URLSearchParams({
                             q: artistOnlyQuery,
                             type: 'album',
-                            limit: 20
+                            limit: 50
                         })}`,
                         {
                             headers: {
@@ -507,6 +509,13 @@ class DiscogsToSpotifyConverter {
 
                     if (response.ok) {
                         const data = await response.json();
+                        if (isDebugSearch) {
+                            console.log(`🔍 Strategy 3 results:`, data.albums.items.length, 'releases by artist');
+                            data.albums.items.forEach((item, idx) => {
+                                console.log(`  ${idx + 1}. "${item.name}" (${item.album_type})`);
+                            });
+                        }
+
                         if (data.albums.items.length > 0) {
                             // Look for partial title matches
                             const cleanSearchTitle = albumTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
@@ -520,8 +529,38 @@ class DiscogsToSpotifyConverter {
                             if (partialMatch) {
                                 album = partialMatch;
                                 found = true;
+                                if (isDebugSearch) console.log(`✅ Found with Strategy 3: "${partialMatch.name}" (${partialMatch.album_type})`);
+                            }
+                        } else {
+                            if (isDebugSearch) console.log(`❌ No releases found for artist "${artist}"`);
+                        }
+                    }
+                }
+
+                // Strategy 4: Last resort - search just the artist name without quotes
+                if (!found && isDebugSearch) {
+                    console.log(`🔍 Strategy 4: Broad artist search without quotes`);
+
+                    const broadArtistQuery = artist;
+                    const response = await fetch(
+                        `https://api.spotify.com/v1/search?${new URLSearchParams({
+                            q: broadArtistQuery,
+                            type: 'album',
+                            limit: 50
+                        })}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.spotifyToken}`
                             }
                         }
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log(`🔍 Strategy 4 results:`, data.albums.items.length, 'albums found');
+                        data.albums.items.slice(0, 10).forEach((item, idx) => {
+                            console.log(`  ${idx + 1}. "${item.name}" by ${item.artists[0].name} (${item.album_type})`);
+                        });
                     }
                 }
 

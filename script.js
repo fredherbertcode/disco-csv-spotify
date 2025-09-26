@@ -267,7 +267,7 @@ class DiscogsToSpotifyConverter {
                 status.classList.remove('hidden');
                 status.innerHTML = `<div class="status-success">✅ Connected as ${user.display_name}</div>`;
 
-                document.getElementById('playlistName').value = `My Discogs Collection (${new Date().toLocaleDateString()})`;
+                document.getElementById('playlistName').value = `My Discogs Collection Albums (${new Date().toLocaleDateString()})`;
                 console.log('Authentication successful, showing step 4');
                 this.showStep(4);
             } else {
@@ -323,24 +323,28 @@ class DiscogsToSpotifyConverter {
     async searchAndAddTracks() {
         const trackUris = [];
         const notFound = [];
+        const foundAlbums = [];
         const total = this.csvData.length;
 
         for (let i = 0; i < this.csvData.length; i++) {
             const record = this.csvData[i];
             const artist = this.getFieldValue(record, ['artist', 'Artist']);
-            const title = this.getFieldValue(record, ['title', 'Title']);
+            const albumTitle = this.getFieldValue(record, ['title', 'Title']);
 
-            if (!artist || !title) {
-                notFound.push(`${artist || 'Unknown'} - ${title || 'Unknown'}`);
+            if (!artist || !albumTitle) {
+                notFound.push(`${artist || 'Unknown'} - ${albumTitle || 'Unknown'}`);
                 continue;
             }
 
             try {
-                const searchQuery = `track:"${title}" artist:"${artist}"`;
-                const response = await fetch(
+                this.updateProgress((i + 1) / total * 80, `Searching album: ${artist} - ${albumTitle}`);
+
+                // Search for the album first
+                const albumSearchQuery = `album:"${albumTitle}" artist:"${artist}"`;
+                const albumResponse = await fetch(
                     `https://api.spotify.com/v1/search?${new URLSearchParams({
-                        q: searchQuery,
-                        type: 'track',
+                        q: albumSearchQuery,
+                        type: 'album',
                         limit: 1
                     })}`,
                     {
@@ -350,23 +354,40 @@ class DiscogsToSpotifyConverter {
                     }
                 );
 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.tracks.items.length > 0) {
-                        trackUris.push(data.tracks.items[0].uri);
+                if (albumResponse.ok) {
+                    const albumData = await albumResponse.json();
+                    if (albumData.albums.items.length > 0) {
+                        const album = albumData.albums.items[0];
+                        foundAlbums.push(`${artist} - ${albumTitle}`);
+
+                        // Get all tracks from the album
+                        const tracksResponse = await fetch(
+                            `https://api.spotify.com/v1/albums/${album.id}/tracks?limit=50`,
+                            {
+                                headers: {
+                                    'Authorization': `Bearer ${this.spotifyToken}`
+                                }
+                            }
+                        );
+
+                        if (tracksResponse.ok) {
+                            const tracksData = await tracksResponse.json();
+                            const albumTrackUris = tracksData.items.map(track => track.uri);
+                            trackUris.push(...albumTrackUris);
+
+                            this.updateProgress((i + 1) / total * 80, `Found ${tracksData.items.length} tracks from: ${artist} - ${albumTitle}`);
+                        }
                     } else {
-                        notFound.push(`${artist} - ${title}`);
+                        notFound.push(`${artist} - ${albumTitle}`);
                     }
                 } else {
-                    notFound.push(`${artist} - ${title}`);
+                    notFound.push(`${artist} - ${albumTitle}`);
                 }
 
-                this.updateProgress((i + 1) / total * 90, `Searching: ${artist} - ${title}`);
-
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 200));
 
             } catch (error) {
-                notFound.push(`${artist} - ${title}`);
+                notFound.push(`${artist} - ${albumTitle}`);
             }
         }
 
@@ -374,7 +395,7 @@ class DiscogsToSpotifyConverter {
             await this.addTracksToPlaylist(trackUris);
         }
 
-        this.showResults(trackUris.length, notFound);
+        this.showResults(trackUris.length, notFound, foundAlbums);
     }
 
     async addTracksToPlaylist(trackUris) {
@@ -415,7 +436,7 @@ class DiscogsToSpotifyConverter {
         document.getElementById('progressText').textContent = text;
     }
 
-    showResults(foundCount, notFound) {
+    showResults(foundTrackCount, notFound, foundAlbums = []) {
         this.updateProgress(100, 'Conversion complete!');
 
         const results = document.getElementById('results');
@@ -424,20 +445,30 @@ class DiscogsToSpotifyConverter {
         let html = '<div class="results-summary">';
         html += '<h3>Conversion Results</h3>';
         html += '<div class="results-stats">';
-        html += `<div class="stat-item"><div class="stat-number">${foundCount}</div><div class="stat-label">Tracks Found</div></div>`;
-        html += `<div class="stat-item"><div class="stat-number">${notFound.length}</div><div class="stat-label">Not Found</div></div>`;
-        html += `<div class="stat-item"><div class="stat-number">${this.csvData.length}</div><div class="stat-label">Total Processed</div></div>`;
+        html += `<div class="stat-item"><div class="stat-number">${foundAlbums.length}</div><div class="stat-label">Albums Found</div></div>`;
+        html += `<div class="stat-item"><div class="stat-number">${foundTrackCount}</div><div class="stat-label">Total Tracks Added</div></div>`;
+        html += `<div class="stat-item"><div class="stat-number">${notFound.length}</div><div class="stat-label">Albums Not Found</div></div>`;
+        html += `<div class="stat-item"><div class="stat-number">${this.csvData.length}</div><div class="stat-label">Total Albums Processed</div></div>`;
         html += '</div>';
 
-        if (foundCount > 0) {
-            html += `<div class="status-success">✅ Successfully created playlist with ${foundCount} tracks!</div>`;
+        if (foundTrackCount > 0) {
+            html += `<div class="status-success">✅ Successfully created playlist with ${foundTrackCount} tracks from ${foundAlbums.length} albums!</div>`;
+        }
+
+        if (foundAlbums.length > 0) {
+            html += '<details style="margin-top: 15px;"><summary>View albums found (' + foundAlbums.length + ')</summary>';
+            html += '<ul style="margin-top: 10px; max-height: 200px; overflow-y: auto;">';
+            foundAlbums.forEach(album => {
+                html += `<li>✅ ${album}</li>`;
+            });
+            html += '</ul></details>';
         }
 
         if (notFound.length > 0) {
-            html += '<details style="margin-top: 15px;"><summary>View tracks not found (' + notFound.length + ')</summary>';
+            html += '<details style="margin-top: 15px;"><summary>View albums not found (' + notFound.length + ')</summary>';
             html += '<ul style="margin-top: 10px; max-height: 200px; overflow-y: auto;">';
-            notFound.forEach(track => {
-                html += `<li>${track}</li>`;
+            notFound.forEach(album => {
+                html += `<li>❌ ${album}</li>`;
             });
             html += '</ul></details>';
         }
